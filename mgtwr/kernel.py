@@ -9,6 +9,7 @@ class GWRKernel:
             coords: np.ndarray,
             bw: float = None,
             fixed: bool = True,
+            spherical = False,
             function: str = 'triangular',
             eps: float = 1.0000001):
 
@@ -20,12 +21,29 @@ class GWRKernel:
         self.eps = eps
         self.bandwidth = None
         self.kernel = None
+        self.spherical = spherical
 
+    def great_circle_cdist(coords_i, coords):
+
+        dLat = np.radians(coords[:, 1] - coords_i[1])
+        dLon = np.radians(coords[:, 0] - coords_i[0])
+        lat1 = np.radians(coords[:, 1])
+        lat2 = np.radians(coords_i[1])
+        a = np.sin(
+            dLat / 2)**2 + np.cos(lat1) * np.cos(lat2) * np.sin(dLon / 2)**2
+        c = 2 * np.arcsin(np.sqrt(a))
+        R = 6371.0
+
+        return R * c
+    
     def cal_distance(
             self,
             i: int):
-        distance = cdist([self.coords[i]], self.coords).reshape(-1)
-        return distance
+        if self.spherical == True:
+           spatial_distance = great_circle_cdist(self.coords[i], self.coords)
+        else:
+           spatial_distance = np.sqrt(np.sum((self.coords[i] - self.coords)**2, axis=1))
+        return spatial_distance
 
     def cal_kernel(
             self,
@@ -74,22 +92,41 @@ class GTWRKernel(GWRKernel):
             bw: float = None,
             tau: float = None,
             fixed: bool = True,
+            spherical = False,
             function: str = 'triangular',
             eps: float = 1.0000001):
 
-        super(GTWRKernel, self).__init__(coords, bw, fixed=fixed, function=function, eps=eps)
+        super(GTWRKernel, self).__init__(coords, bw, fixed=fixed, spherical = spherical, function=function, eps=eps)
 
         self.t = t
         self.tau = tau
         self.coords_new = None
+        self.spherical = spherical
 
+    def great_circle_cdist(coords_i, coords):
+
+        dLat = np.radians(coords[:, 1] - coords_i[1])
+        dLon = np.radians(coords[:, 0] - coords_i[0])
+        lat1 = np.radians(coords[:, 1])
+        lat2 = np.radians(coords_i[1])
+        a = np.sin(
+            dLat / 2)**2 + np.cos(lat1) * np.cos(lat2) * np.sin(dLon / 2)**2
+        c = 2 * np.arcsin(np.sqrt(a))
+        R = 6371.0
+
+        return R * c
+    
     def cal_distance(
             self,
             i: int):
-
-        if self.tau == 0:
-            self.coords_new = self.coords
+        if self.spherical == True:
+           spatial_distance = great_circle_cdist(self.coords[i], self.coords)
         else:
-            self.coords_new = np.hstack([self.coords, (np.sqrt(self.tau) * self.t)])
-        distance = cdist([self.coords_new[i]], self.coords_new).reshape(-1)
-        return distance
+           spatial_distance = np.sqrt(np.sum((self.coords[i] - self.coords)**2, axis=1))
+        
+        if self.tau == 0:
+            return spatial_distance
+        else:
+            spatial_temporal_distance = np.sqrt(spatial_distance**2 + self.tau * (self.t - self.t[i])**2)
+   
+        return spatial_temporal_distance

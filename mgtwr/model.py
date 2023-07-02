@@ -20,6 +20,7 @@ class GWR(BaseModel):
             kernel: str = 'bisquare',
             fixed: bool = True,
             constant: bool = True,
+            spherical = False,
             thread: int = 1,
             convert: bool = False,
     ):
@@ -83,7 +84,7 @@ class GWR(BaseModel):
         print(gwr.R2)
         0.7128737240047688
         """
-        super(GWR, self).__init__(X, y, kernel, fixed, constant)
+        super(GWR, self).__init__(X, y, kernel, fixed, constant, spherical)
         if thread < 1 or not isinstance(thread, int):
             raise ValueError('thread should be an integer greater than or equal to 1')
         if isinstance(coords, pd.DataFrame):
@@ -96,13 +97,14 @@ class GWR(BaseModel):
             self.coords = np.hstack([longitude, latitude])
         self.bw = bw
         self.thread = thread
+        self.spherical = spherical
 
     def _build_wi(self, i, bw):
         """
         calculate Weight matrix
         """
         try:
-            gwr_kernel = GWRKernel(self.coords, bw, fixed=self.fixed, function=self.kernel)
+            gwr_kernel = GWRKernel(self.coords, bw, spherical = self.spherical, fixed=self.fixed, function=self.kernel)
             distance = gwr_kernel.cal_distance(i)
             wi = gwr_kernel.cal_kernel(distance)
         except BaseException:
@@ -198,6 +200,7 @@ class MGWR(GWR):
             y: np.ndarray,
             selector,
             kernel: str = 'bisquare',
+            spherical = False, 
             fixed: bool = False,
             constant: bool = True,
             thread: int = 1,
@@ -276,6 +279,7 @@ class MGWR(GWR):
             coords, X, y, bw_init, kernel=kernel, fixed=fixed, constant=constant, thread=thread, convert=convert)
         self.n_chunks = None
         self.ENP_j = None
+        self.spherical = spherical
 
     def _chunk_compute(self, chunk_id=0):
         n = self.n
@@ -292,7 +296,7 @@ class MGWR(GWR):
                        k))  # partial R: n by chunk_size by k
 
         for i in range(n):
-            wi = self._build_wi(i, self.bw).reshape(-1, 1)
+            wi = self._build_wi(i, self.bw, spherical = self.spherical).reshape(-1, 1)
             xT = (self.X * wi).T
             P = np.linalg.solve(xT.dot(self.X), xT).dot(init_pR).T
             pR[i, :, :] = P * self.X[i]
@@ -416,7 +420,8 @@ class GTWR(BaseModel):
             fixed: bool = False,
             constant: bool = True,
             thread: int = 1,
-            convert: bool = False
+            convert: bool = False,
+            spherical = False
     ):
         super(GTWR, self).__init__(X, y, kernel, fixed, constant)
         if thread < 1 or not isinstance(thread, int):
@@ -435,13 +440,14 @@ class GTWR(BaseModel):
         self.bw_s = self.bw
         self.bw_t = np.sqrt(self.bw ** 2 / self.tau)
         self.thread = thread
+        self.spherical = spherical 
 
     def _build_wi(self, i, bw, tau):
         """
         calculate Weight matrix
         """
         try:
-            gtwr_kernel = GTWRKernel(self.coords, self.t, bw, tau, fixed=self.fixed, function=self.kernel)
+            gtwr_kernel = GTWRKernel(self.coords, self.t, bw, tau, spherical = self.spherical, fixed=self.fixed, function=self.kernel)
             distance = gtwr_kernel.cal_distance(i)
             wi = gtwr_kernel.cal_kernel(distance)
         except BaseException:
@@ -604,7 +610,8 @@ class MGTWR(GTWR):
             fixed: bool = False,
             constant: bool = True,
             thread: int = 1,
-            convert: bool = False
+            convert: bool = False,
+            spherical = False
     ):
         self.selector = selector
         self.bws = self.selector.bws[0]  # final set of bandwidth
@@ -619,6 +626,7 @@ class MGTWR(GTWR):
                          kernel=kernel, fixed=fixed, constant=constant, thread=thread, convert=convert)
         self.n_chunks = None
         self.ENP_j = None
+        self.spherical = spherical
 
     def _chunk_compute(self, chunk_id=0):
         n = self.n
